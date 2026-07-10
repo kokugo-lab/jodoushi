@@ -260,7 +260,7 @@ table.katsu td .sub{display:block;font-size:12.5px;color:var(--hi);font-weight:6
 
 /* クイズ画面：上に問題カード、中央に2人の立ち絵、下に選択肢 */
 #scr-quiz .stage{flex:1 1 auto;min-height:180px}
-#q-card{max-height:32%;top:6px}
+#q-card{max-height:44%;height:auto;top:6px}
 #scr-quiz #q-panel{flex:0 0 auto;margin-top:0}
 #scr-quiz{overflow:hidden}
 
@@ -835,11 +835,11 @@ const QUIZ = [
 const REACT = {
   correct: {
     h: ['お見事！　その調子ですわ。','正解ですわ。ようできました。','さすが。筋がよろしいこと。','うふふ、その通りですわ。','見事な冴えですこと。'],
-    n: ['やった、合ってた〜！','ふふん、なんとなく分かっちゃいました。','よし、指で数えた甲斐がありました！','姫さま、わたし今のはドヤ顔していいですか？','やった〜！姫さまもにこにこしてますね！','やった〜！　姫さま、今の見てました！？','合ってた……！　ちょっとドキドキしてました','いえーい！古文って、分かるとちょっと楽しいですね']
+    n: ['やった、合ってた〜！','ふふん、なんとなく分かっちゃいました。','よし、活用表を唱えた甲斐がありました！','姫さま、わたし今のはドヤ顔していいですか？','やった〜！姫さまもにこにこしてますね！','やった〜！　姫さま、今の見てました！？','合ってた……！　ちょっとドキドキしてました','いえーい！古文って、分かるとちょっと楽しいですね']
   },
   wrong: {
     h: ['惜しい。解説をようご覧なさい。','あら、もう一歩ですわね。','大丈夫、次で取り返しましょう。','ここが覚えどころですわ。','間違いは学びの種。気になさらず。'],
-    n: ['ええ〜、そっちだったんですか！','わたしも同じの選びました！（後出し）','わたしもそれにしようとしてました……たぶん。','今のは引っかけですよね？　ね？','悔しい〜！　でも一個かしこくなりました。','うぅ……でも間違えたやつほど覚えるって言いますもんね！','うぅ、助動詞って手ごわい……。次いきましょ、次！','惜しい！　考え方は合ってた気がします']
+    n: ['ええ〜、そっちだったんですか！','わたしも同じの選びました！（後出し）','わたしもそれにしようとしてました……たぶん。','今のは引っかけですよね？　ね？','悔しい〜！　でも一個かしこくなりました。','うぅ……でも間違えたものほど覚えるって言いますもんね！','うぅ、助動詞って手ごわい……。次いきましょ、次！','惜しい！　考え方は合ってた気がします']
   }
 };
 function pick(a){ return a[Math.floor(Math.random()*a.length)]; }
@@ -1127,7 +1127,7 @@ function renderQ(){
   $('#q-score').textContent = `${qscore} 問正解`;
   $('#q-no').textContent = `第 ${qi+1} 問／全 ${qset.length} 問　〔${q.k}〕`;
   $('#q-text').innerHTML = (q.k==='意味'?`次の傍線部の意味は？<span class="kobun">${q.s}</span>`:q.k==='訳'?`次の現代語訳として正しいものは？<span class="kobun">${q.s}</span>`:`<span style="font-size:16px">${q.s}</span>`)
-    + (q.note?`<div style="font-size:12px;color:#9c6b1f;margin-top:2px">※ ${q.note}</div>`:'');
+    + (q.note?`<div style="font-size:12px;color:#9c6b1f;margin-top:4px;padding-bottom:2px">※ ${q.note}</div>`:'');
   const box = $('#q-choices'); box.innerHTML=''; box.className = q.k==='訳' ? 'wide' : '';
   q.c.forEach((c,i)=>{
     const b=document.createElement('button'); b.className='q-btn'; b.textContent=c;
