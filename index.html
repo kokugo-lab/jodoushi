@@ -2722,15 +2722,18 @@ function applyGyro(){
   camera.quaternion.setFromEuler(_e1).multiply(_gq1).multiply(_gq0.setFromAxisAngle(_zee,-or));
   if(gyro.need){ gyro.need = false; setView(player, gyro.wantYaw!=null ? gyro.wantYaw : rig.rotation.y); }
 }
+/* iPhone では「モーションと画面の向き」の許可が要る。許可の確認はボタンを押した直後（ほかの処理を待つ前）にしか出せない */
 async function startGyro(){
   gyro.live = false; gyro.wantYaw = camYaw();
+  if(typeof DeviceOrientationEvent==='undefined') return 'none';
   try{
-    if(typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){
+    if(typeof DeviceOrientationEvent.requestPermission==='function'){
       const r = await DeviceOrientationEvent.requestPermission();
-      if(r!=='granted') return;
+      if(r!=='granted') return 'denied';
     }
     window.addEventListener('deviceorientation', onDeviceOrientation);
-  }catch(e){}
+    return 'ok';
+  }catch(e){ return 'denied'; }
 }
 function stopGyro(){
   window.removeEventListener('deviceorientation', onDeviceOrientation);
@@ -3296,12 +3299,15 @@ function begin(){
 function enterDesk(){ if(mode==='stereo') leaveStereo(); mode = 'desk'; onResize(); begin(); }
 async function enterStereo(){
   const y = started ? camYaw() : 0;
+  const gp = startGyro();   /* 許可の確認を最初に出す（待ちをはさむと iPhone では出なくなる） */
   mode = 'stereo'; rootEl.classList.add('stereo'); look.pitch = 0;
   try{ if(rootEl.requestFullscreen){ await rootEl.requestFullscreen(); fsWas = true; } }catch(e){}
   try{ if(screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape'); }catch(e){}
   try{ if(navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen'); }catch(e){}
-  await startGyro(); gyro.wantYaw = y;
+  const gr = await gp; gyro.wantYaw = y;
   onResize(); begin(); setView(player, y);
+  if(gr==='denied') toast(null, '傾きセンサーが<b>許可されていません</b>。ブラウザを一度とじて開きなおし、「モーションと画面の向き」を<b>許可</b>してください。いまは指でドラッグして見まわせます。', 12);
+  else setTimeout(()=>{ if(mode==='stereo' && !gyro.live) toast(null, '傾きセンサーの信号が届いていません。<b>https</b> のページで開いているか、端末の設定をご確認ください。いまは指でドラッグして見まわせます。', 10); }, 2500);
 }
 function leaveStereo(){
   if(mode!=='stereo') return;
