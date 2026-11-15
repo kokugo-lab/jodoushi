@@ -418,21 +418,20 @@ table.katsu td .sub{display:block;font-size:12.5px;color:var(--hi);font-weight:6
     <div id="vr-tools">
       <button class="vr-tool" id="vr-quit" style="display:none">✕ やめる</button>
       <button class="vr-tool" id="vr-map">絵図</button>
-      <button class="vr-tool" id="vr-mode">VR切替</button>
+      <button class="vr-tool" id="vr-mode">VRモード</button>
       <button class="vr-tool" id="vr-mute">音 ♪</button>
     </div>
     <div id="vr-help"></div>
   </div>
   <div id="vr-stereo-ui">
-    <button id="vr-stereo-exit">✕ 二眼をやめる</button>
-    <div id="vr-rotate">スマホを横向きにして<br>ゴーグルにセットしてください</div>
+    <button id="vr-stereo-exit">✕ VRモードをやめる</button>
+    <div id="vr-rotate">スマホを横向きにして<br>VRゴーグルにセットしてください</div>
   </div>
   <div id="vr-launch">
     <div class="vr-box">
       <h2>絵巻の旅</h2>
       <p>湖をかこむ<b>九つの帖</b>をめぐる、立体の冒険モード。姫の講義を聞き、活用の順に<b>飛び石</b>をわたり、問題にこたえて<b>物の怪</b>をしずめて、里の「<b>言の葉</b>」を取りもどそう。</p>
-      <button class="t-btn vr-go" id="vr-go-xr">VRゴーグルで入る<small id="vr-xr-note">Meta Quest など・コントローラーなしでも見つめて操作</small></button>
-      <button class="t-btn vr-go" id="vr-go-stereo">スマホ二眼VR<small>スマホ用VRゴーグルにセット・頭の動きで見まわす</small></button>
+      <button class="t-btn vr-go" id="vr-go-stereo">VRモード<small>スマホをVRゴーグルにセット・頭の動きで見まわし、見つめてえらぶ</small></button>
       <button class="t-btn vr-go" id="vr-go-desk">画面のまま3Dで冒険<small>パソコン・タブレット・スマホ</small></button>
       <div id="vr-launch-msg"></div>
       <div class="vr-foot"><button id="vr-back">◀ 表紙へ</button><button id="vr-reset">記録を消してはじめから</button></div>
@@ -1250,7 +1249,7 @@ function showResult(){
 <!--VR:three>--><script id="vr-script">
 /* ================= 絵巻の旅（VR・3D冒険モード） =================
    タイトルの「絵巻の旅」から開く。three.js はページ末尾に埋めこんであり、開いたときにはじめて読みこむ。
-   VRゴーグル（WebXR）／スマホ二眼（傾きセンサー）／画面のまま、の三通りで同じ世界を歩ける。 */
+   VRモード（スマホをVRゴーグルにセットする二眼表示・傾きセンサー）と、画面のまま3D、の二通りで同じ世界を歩ける。 */
 const VRTabi = (function(){
   let world = null, opening = false;
   async function loadThree(){
@@ -1390,7 +1389,6 @@ const learned = id => !!(save.learn[id] || cleared[id]);
 /* ---------- 描画の土台 ---------- */
 const renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:false, powerPreference:'high-performance'});
 renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, 2));
-renderer.xr.enabled = true;
 const ANISO = Math.min(8, renderer.capabilities.getMaxAnisotropy());
 const scene = new THREE.Scene();
 const HAZE = new THREE.Color('#f4cda6');
@@ -2479,9 +2477,8 @@ function drawSign(c,p){
   richDraw(c, F.L, 18, H/2-(n*F.lh)/2+F.px*.9, F.lh, {align:'center', w:W-36, color:s.fg||'#40241a'});
 }
 /* ================= 5. 見る・指す・歩く ================= */
-let mode = 'desk';            /* 'desk'＝画面のまま / 'stereo'＝スマホ二眼 / 'xr'＝VRゴーグル */
+let mode = 'desk';            /* 'desk'＝画面のまま3D / 'stereo'＝VRモード（スマホ二眼） */
 let started = false;          /* 冒険が始まっているか（入口の案内を閉じたあと） */
-let xrSession = null;
 let mapOpen = false, traveling = false;
 const look = {pitch:0};
 const player = new THREE.Vector3(0,GY,62);   /* プレイヤーの足もと（毎フレーム更新） */
@@ -2492,7 +2489,7 @@ function setStage(m){ stage.matrix.copy(m); stage.updateMatrixWorld(true); }
 const canMove = ()=>started && !actId && !mapOpen && !traveling;
 function camLocalYaw(){ _v1.set(0,0,-1).applyQuaternion(camera.quaternion); return Math.atan2(-_v1.x,-_v1.z); }
 function camYaw(){ camera.getWorldDirection(_v1); return Math.atan2(-_v1.x,-_v1.z); }
-/* 足もとを p に、視線を yaw に合わせる（ゴーグルで頭がどちらを向いていても合うように） */
+/* 足もとを p に、視線を yaw に合わせる（頭がどちらを向いていても合うように） */
 function setView(p, yaw){
   if(yaw!=null) rig.rotation.y = yaw - camLocalYaw();
   _v1.copy(camera.position).setY(0).applyAxisAngle(UP, rig.rotation.y);
@@ -2578,7 +2575,7 @@ function doSelect(pk){
 
 /* 指す手段（マウス・視線・コントローラー）ごとの状態 */
 function makePtr(){ return {o:new THREE.Vector3(), d:new THREE.Vector3(), pk:null, key:null, hp:null, on:false}; }
-const ptrMouse = makePtr(), ptrGaze = makePtr(), ptrCtl = [makePtr(), makePtr()];
+const ptrMouse = makePtr(), ptrGaze = makePtr();
 function setHover(ptr, pk){
   const key = pk && pk.btn ? pk.key : null;
   ptr.pk = pk;
@@ -2590,7 +2587,7 @@ function setHover(ptr, pk){
 }
 function clearPtr(ptr){ if(ptr.on || ptr.key){ setHover(ptr,null); ptr.on = false; } }
 
-/* 目印（視線の照準・移動先の輪・コントローラーの光線） */
+/* 目印（視線の照準・移動先の輪） */
 const UIM = (c,o)=>new THREE.MeshBasicMaterial(Object.assign({color:c, transparent:true, depthTest:false, depthWrite:false, fog:false}, o||{}));
 const reticle = new THREE.Group();
 const retRing = new THREE.Mesh(new THREE.RingGeometry(.72,1,32), UIM('#ffffff',{opacity:.92}));
@@ -2600,55 +2597,13 @@ const tpRing = new THREE.Group();
 { const g1 = new THREE.RingGeometry(.34,.46,32); g1.rotateX(-Math.PI/2); const g2 = new THREE.CircleGeometry(.2,20); g2.rotateX(-Math.PI/2);
   tpRing.add(new THREE.Mesh(g1, UIM('#fff0c8',{opacity:.95, depthTest:true})), new THREE.Mesh(g2, UIM('#ffd27a',{opacity:.55, depthTest:true}))); }
 tpRing.visible = false; scene.add(tpRing);
-const ctl = [0,1].map(i=>{
-  const c = renderer.xr.getController(i);
-  const lg = new THREE.BoxGeometry(.005,.005,1); lg.translate(0,0,-.5);
-  const line = new THREE.Mesh(lg, UIM('#fff0c8',{opacity:.8, depthTest:true}));
-  const wand = new THREE.Mesh(new THREE.CylinderGeometry(.011,.014,.17,8).rotateX(Math.PI/2), new THREE.MeshLambertMaterial({color:COL.beni}));
-  wand.position.z = .04;
-  const dot = new THREE.Mesh(new THREE.SphereGeometry(.014,10,8), UIM('#ffffff')); dot.renderOrder = 960; dot.visible = false; scene.add(dot);
-  c.add(line, wand); lift.add(c);
-  c.userData = {line, wand, dot, src:null, i, ref:null, lastUse:-99};
-  c.addEventListener('connected', e=>{ c.userData.src = e.data; });
-  c.addEventListener('disconnected', ()=>{ c.userData.src = null; dot.visible = false; clearPtr(ptrCtl[i]); });
-  c.addEventListener('selectstart', ()=>{
-    const src = c.userData.src, tp = src && src.targetRayMode==='tracked-pointer';
-    if(tp && clock.t-c.userData.lastUse>=CTL_IDLE){ c.userData.lastUse = clock.t; return; }   /* 眠っていた手は、まず起こすだけ */
-    if(tp) c.userData.lastUse = clock.t;
-    doSelect(tp ? ptrCtl[i].pk : ptrGaze.pk);
-  });
-  c.addEventListener('squeezestart', ()=>{ c.userData.lastUse = clock.t; if(started) toggleMap(); });
-  return c;
-});
-
 const dwell = {key:null, t:0, lock:false};
-const DWELL_T = 1.15, CTL_IDLE = 6;
+const DWELL_T = 1.15;
 let gazeOn = false;
-const snapped = {};
 function updatePointers(dt){
   let ring = null;
-  /* --- コントローラー --- */
-  let tracked = 0;
-  for(let i=0;i<2;i++){
-    const c = ctl[i], ud = c.userData, ptr = ptrCtl[i];
-    let live = mode==='xr' && c.visible && ud.src && ud.src.targetRayMode==='tracked-pointer';
-    if(live){
-      /* 置きっぱなしで動いていないコントローラーは「無い」とみなし、視線で選べるようにする */
-      _v2.copy(c.position); _v3.set(0,0,-1).applyQuaternion(c.quaternion);
-      if(!ud.ref){ ud.ref = {p:_v2.clone(), d:_v3.clone()}; }
-      else if(ud.ref.p.distanceToSquared(_v2)>.00012 || ud.ref.d.dot(_v3)<.9998){ ud.ref.p.copy(_v2); ud.ref.d.copy(_v3); ud.lastUse = clock.t; }
-      live = clock.t-ud.lastUse<CTL_IDLE;
-    }
-    ud.line.visible = ud.wand.visible = live; if(!live){ ud.dot.visible = false; clearPtr(ptr); continue; }
-    tracked++; ptr.on = true;
-    c.getWorldPosition(ptr.o); ptr.d.set(0,0,-1).transformDirection(c.matrixWorld);
-    const pk = pickRay(ptr.o,ptr.d); setHover(ptr,pk);
-    ud.line.scale.z = pk ? pk.dist : 6;
-    ud.dot.visible = !!pk; if(pk){ ud.dot.position.copy(pk.point); ud.dot.scale.setScalar(Math.max(1,pk.dist*.6)); }
-    if(pk && (pk.kind==='ground'||pk.kind==='node')) ring = pk.point;
-  }
   /* --- 視線 --- */
-  gazeOn = mode==='stereo' || (mode==='xr' && tracked===0);
+  gazeOn = mode==='stereo';
   if(gazeOn){
     const ptr = ptrGaze; ptr.on = true;
     camera.getWorldPosition(ptr.o); camera.getWorldDirection(ptr.d);
@@ -2695,7 +2650,7 @@ canvas.addEventListener('pointermove', e=>{
   const dx = e.clientX-mouse.x, dy = e.clientY-mouse.y; mouse.x = e.clientX; mouse.y = e.clientY;
   mouse.moved += Math.abs(dx)+Math.abs(dy);
   if(mouse.moved>8) mouse.drag = true;
-  if(mouse.drag && started && mode!=='xr'){
+  if(mouse.drag && started){
     const k = .0042*(camera.fov/70);
     rig.rotation.y += dx*k;
     if(mode==='desk' || !gyro.live) look.pitch = clamp(look.pitch+dy*k, -1.25, 1.25);
@@ -2706,7 +2661,7 @@ function pointerUp(e){
   mouse.down = false;
   const tap = !mouse.drag && performance.now()-mouse.t<600;
   mouse.drag = false;
-  if(!tap || !started || mode==='xr') return;
+  if(!tap || !started) return;
   if(mode==='stereo'){ doSelect(ptrGaze.pk); return; }
   ndcOf(e); scene.updateMatrixWorld();
   raycaster.setFromCamera(mouse.ndc, camera);
@@ -2736,28 +2691,16 @@ function walk(dx, dz){
   rig.position.x += dx; rig.position.z += dz;
 }
 function updateMove(dt){
-  if(mode!=='xr') camera.rotation.x = look.pitch;
+  camera.rotation.x = look.pitch;
   if(mode==='stereo' && gyro.live) applyGyro();
   if(!canMove()) return;
   let f = 0, s = 0;
-  if(mode!=='xr'){
-    if(keys.KeyW||keys.ArrowUp) f += 1; if(keys.KeyS||keys.ArrowDown) f -= 1;
-    if(keys.KeyD) s += 1; if(keys.KeyA) s -= 1;
-    const turn = (keys.ArrowLeft||keys.KeyQ ? 1 : 0)-(keys.ArrowRight||keys.KeyE ? 1 : 0);
-    if(turn) rig.rotation.y += turn*1.7*dt;
-  }else if(xrSession){
-    for(const src of xrSession.inputSources){
-      const gp = src.gamepad; if(!gp || gp.axes.length<4) continue;
-      const ax = gp.axes[2], ay = gp.axes[3], id = src.handedness||'x';
-      if(Math.abs(ax)>.65){
-        if(!snapped[id]){ snapped[id] = true; setView(player, camYaw()+(ax<0 ? 1 : -1)*30*DEG); }
-      }else if(Math.abs(ax)<.3) snapped[id] = false;
-      if(Math.abs(ay)>.25) f -= ay;
-    }
-    f = clamp(f,-1,1);
-  }
+  if(keys.KeyW||keys.ArrowUp) f += 1; if(keys.KeyS||keys.ArrowDown) f -= 1;
+  if(keys.KeyD) s += 1; if(keys.KeyA) s -= 1;
+  const turn = (keys.ArrowLeft||keys.KeyQ ? 1 : 0)-(keys.ArrowRight||keys.KeyE ? 1 : 0);
+  if(turn) rig.rotation.y += turn*1.7*dt;
   if(f||s){
-    const yaw = camYaw(), sp = (mode==='xr' ? 2.4 : 4.2)*dt;
+    const yaw = camYaw(), sp = 4.2*dt;
     walk((-Math.sin(yaw)*f+Math.cos(yaw)*s)*sp, (-Math.cos(yaw)*f-Math.sin(yaw)*s)*sp);
   }
   /* 地面の高さに沿わせる（橋のふくらみなど） */
@@ -2765,7 +2708,7 @@ function updateMove(dt){
   if(wy!==null) rig.position.y = lerp(rig.position.y, wy, Math.min(1,dt*10));
 }
 
-/* ---------- スマホ二眼：傾きセンサーで見回す ---------- */
+/* ---------- VRモード（スマホ二眼）：傾きセンサーで見回す ---------- */
 const gyro = {live:false, a:0, b:0, g:0, need:false};
 const _zee = new THREE.Vector3(0,0,1), _gq0 = new THREE.Quaternion(), _gq1 = new THREE.Quaternion(-Math.SQRT1_2,0,0,Math.SQRT1_2);
 function onDeviceOrientation(e){
@@ -2798,7 +2741,6 @@ function stopGyro(){
 const stereoCam = new THREE.StereoCamera(); stereoCam.eyeSep = .064;
 const _size = new THREE.Vector2();
 function onResize(){
-  if(renderer.xr.isPresenting) return;
   const w = Math.max(1,rootEl.clientWidth), h = Math.max(1,rootEl.clientHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio||1, mode==='stereo' ? 1.5 : 2));
   renderer.setSize(w,h,false);
@@ -2807,7 +2749,7 @@ function onResize(){
   camera.updateProjectionMatrix();
 }
 function render(){
-  if(mode==='stereo' && !renderer.xr.isPresenting){
+  if(mode==='stereo'){
     renderer.getSize(_size);
     const w = _size.x, h = _size.y;
     scene.updateMatrixWorld();
@@ -3114,9 +3056,7 @@ function introAct(){ return runAct(0, async()=>{
   await goStage(F);
   const s = homeSpots(0); placeChar('h',s[0],player); placeChar('n',s[1],player); charsHome = 0;
   showDlg(); placeQuit(-1.5,.42,-1.7);
-  const how = mode==='xr' && gazeOn ? '行きたい<b>足あと</b>や〈しるし〉を、まんなかの丸い印で<b>じっと見つめる</b>と、えらべます。コントローラーは要りませんよ。<b>足もとを見る</b>と、絵図や出口の札が出てきます！'
-            : mode==='xr' ? 'コントローラーの<b>光</b>を地面や光る<b>足あと</b>に向けて<b>トリガー</b>を引くと移動できます。コントローラーを置けば、<b>見つめるだけ</b>でもえらべますよ。<b>足もとを見る</b>と、絵図や出口の札が出てきます！'
-            : mode==='stereo' ? '行きたい<b>足あと</b>や〈しるし〉を<b>じっと見つめる</b>と、えらべます（画面タップでも決定）。<b>足もとを見る</b>と、絵図や出口の札が出てきますよ！'
+  const how = mode==='stereo' ? '行きたい<b>足あと</b>や〈しるし〉を<b>じっと見つめる</b>と、えらべます（画面タップでも決定）。<b>足もとを見る</b>と、絵図や出口の札が出てきますよ！'
             : '画面を<b>ドラッグ</b>して見まわし、行きたい地面や光る<b>足あと</b>を<b>クリック（タップ）</b>すると移動できます。矢印キーでも歩けますよ！';
   await say('h','ようこそ、<b>紅葉の里</b>へ。ここは湖をかこんで九つの帖がならぶ、助動詞の絵巻の世界ですわ。');
   await say('n','たいへんなんです！　物の怪<b>「文法くずし」</b>とその手下が、里の<b>言の葉</b>を九つとも持ち去ってしまって……！',{mood:'oops'});
@@ -3315,7 +3255,7 @@ async function ending(F){
 }
 /* ================= 7. 起動・モード切替・毎フレーム ================= */
 let quitShown = false;
-let isOpen = false, wakeLock = null, xrAlign = 0, xrAlignTo = null, fsWas = false;
+let isOpen = false, wakeLock = null, fsWas = false;
 const hudEl = $id('vr-hud'), launchEl = $id('vr-launch'), stereoEl = $id('vr-stereo-ui'), msgEl = $id('vr-launch-msg');
 
 function frame(now){
@@ -3324,7 +3264,6 @@ function frame(now){
   updateMove(dt);
   scene.updateMatrixWorld();
   camera.getWorldPosition(headW); player.set(headW.x, rig.position.y, headW.z);
-  if(xrAlign>0 && renderer.xr.isPresenting && --xrAlign===0){ setView(xrAlignTo.p, xrAlignTo.yaw); camera.getWorldPosition(headW); }
   updateTweens(dt);
   if(started){ updateHome(); updateFoot(); }
   if(!!actId!==quitShown){ quitShown = !!actId; $id('vr-quit').style.display = quitShown ? '' : 'none'; $id('vr-map').style.display = quitShown ? 'none' : ''; }
@@ -3371,41 +3310,10 @@ function leaveStereo(){
   try{ if(wakeLock){ wakeLock.release(); wakeLock = null; } }catch(e){}
   fsWas = false; onResize(); showHud();
 }
-async function enterXR(){
-  let s = null, floor = true;
-  try{ s = await navigator.xr.requestSession('immersive-vr', {requiredFeatures:['local-floor'], optionalFeatures:['hand-tracking']}); }
-  catch(e){
-    try{ s = await navigator.xr.requestSession('immersive-vr', {optionalFeatures:['hand-tracking']}); floor = false; }
-    catch(e2){ showLaunch('VRを開始できませんでした。ゴーグルの接続やブラウザの設定をご確認ください。'); return; }
-  }
-  if(mode==='stereo') leaveStereo();
-  const y = started ? camYaw() : 0, p = started ? player.clone() : V(0,GY,61.5);
-  mode = 'xr'; look.pitch = 0; camera.rotation.set(0,0,0);
-  renderer.xr.setReferenceSpaceType(floor ? 'local-floor' : 'local');
-  lift.position.y = floor ? 0 : 1.6;
-  try{ renderer.xr.setFoveation(1); }catch(e){}
-  try{ await renderer.xr.setSession(s); }
-  catch(e){ try{ s.end(); }catch(e3){} mode = 'desk'; lift.position.y = 1.6; showLaunch('VRを開始できませんでした。'); return; }
-  xrSession = s;
-  s.addEventListener('end', onXREnd, {once:true});
-  begin();
-  xrAlign = 4; xrAlignTo = {p, yaw:y};
-}
-function onXREnd(){
-  const y = camYaw(), p = player.clone();
-  xrSession = null; mode = 'desk'; lift.position.y = 1.6; xrAlign = 0;
-  camera.position.set(0,0,0); camera.rotation.set(0,0,0); look.pitch = 0;
-  setView(p,y);
-  setTimeout(()=>{ onResize(); showHud(); }, 60);
-}
-function exitImmersive(){
-  if(mode==='xr' && xrSession){ xrSession.end().catch(noop); }
-  else if(mode==='stereo') leaveStereo();
-}
+function exitImmersive(){ if(mode==='stereo') leaveStereo(); }
 
 $id('vr-go-desk').onclick = ()=>{ sfx('select'); enterDesk(); };
 $id('vr-go-stereo').onclick = ()=>{ sfx('select'); enterStereo(); };
-$id('vr-go-xr').onclick = ()=>{ sfx('select'); enterXR(); };
 $id('vr-back').onclick = ()=>{ sfx('tap'); api.close(); };
 $id('vr-exit').onclick = ()=>{ sfx('tap'); api.close(); };
 $id('vr-map').onclick = ()=>toggleMap();
@@ -3457,13 +3365,9 @@ const api = {
     onResize(); syncMute();
     clock.last = performance.now();
     renderer.setAnimationLoop(frame);
-    const xb = $id('vr-go-xr'), note = $id('vr-xr-note');
-    const setX = ok=>{ xb.disabled = !ok; note.textContent = ok ? 'Meta Quest など・コントローラーなしでも見つめて操作' : 'この機器・ブラウザでは使えません'; };
-    if(navigator.xr && navigator.xr.isSessionSupported) navigator.xr.isSessionSupported('immersive-vr').then(setX).catch(()=>setX(false)); else setX(false);
     showLaunch();
   },
   close(){
-    if(xrSession){ try{ xrSession.end(); }catch(e){} }
     leaveStereo();
     renderer.setAnimationLoop(null);
     isOpen = false; rootEl.style.display = 'none';
@@ -3471,7 +3375,7 @@ const api = {
   },
   /* 動作確認用 */
   _dbg:{ get state(){ return {mode, started, actId, mapOpen, player:player.toArray(), save}; },
-         curAns:()=>qbS.q ? qbS.q.a : 0, dlgProg:()=>dlgS.prog, gaze:()=>({gazeOn, dwell:dwell.t, key:dwell.key}), waiting:()=>({any:!!anyWaiter, choice:!!choiceWaiter, sum:sum.mesh.visible, ofuda:ofuda[0].mesh.visible}), lessonAct, stonesAct, battleAct, introAct, mapGo, toggleMap, abortAct, fireAny, fireChoice, setView, V, look, rig, camera, scene, renderer, frameLesson, frameBattle, frameStones, travel, enterStereo, enterDesk, chars, mono, panels, save:()=>save }
+         curAns:()=>qbS.q ? qbS.q.a : 0, waiting:()=>({any:!!anyWaiter, choice:!!choiceWaiter, sum:sum.mesh.visible, ofuda:ofuda[0].mesh.visible}), lessonAct, stonesAct, battleAct, introAct, mapGo, toggleMap, abortAct, fireAny, fireChoice, setView, V, look, rig, camera, scene, renderer, frameLesson, frameBattle, frameStones, travel, enterStereo, enterDesk, chars, mono, panels, save:()=>save }
 };
 return api;
   }
