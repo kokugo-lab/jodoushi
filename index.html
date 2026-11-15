@@ -2810,7 +2810,7 @@ stSign.forEach(p=>stage.add(p.mesh)); stPassed.forEach(p=>stage.add(p.mesh));
 const flyOfuda = new THREE.Mesh(new THREE.PlaneGeometry(1,.3125), new THREE.MeshBasicMaterial({transparent:true, side:THREE.DoubleSide, fog:false}));
 flyOfuda.visible = false; scene.add(flyOfuda);
 
-function showDlg(z, y){ dlg.mesh.position.set(0,(y||0)+.95,z==null ? -2.25 : z); dlg.mesh.rotation.x = -.28; }
+function showDlg(z, y){ dlg.mesh.position.set(0,(y||0)+.95,z==null ? -2.25 : z); dlg.mesh.rotation.set(-.28,0,0,'YXZ'); }
 function placeQuit(x,y,z){ quitP.mesh.position.set(x,y,z); quitP.mesh.rotation.set(-.5,.35,0,'YXZ'); quitP.show(); }
 let dlgDirty = false, dlgLast = 0;
 async function say(sp, html, o){
@@ -2884,6 +2884,7 @@ function cleanupAct(){
   chars.h.look = chars.n.look = null;
   charsHome = -1;
   markers.forEach(p=>{ p.cool = true; });
+  chars.h.cool = chars.n.cool = true;
 }
 async function goStage(F, o){
   setStage(F);
@@ -3092,7 +3093,7 @@ function introAct(){ return runAct(0, async()=>{
   await say('n','たいへんなんです！　物の怪<b>「文法くずし」</b>とその手下が、里の<b>言の葉</b>を九つとも持ち去ってしまって……！',{mood:'oops'});
   await say('h','帖をめぐって——〈<b>学</b>〉でわたくしの講義を聞き、〈<b>渡</b>〉の飛び石で言の葉を取りもどし、〈<b>鎮</b>〉の祠で物の怪をしずめてくださいませ。');
   await say('n',how);
-  await say('n','道だけじゃなくて、<b>山の上や岸辺</b>も歩けます。<b>ひかる紅葉</b>や<b>秘伝の宝箱</b>が、あちこちにかくれているんですよ！',{mood:'joy'});
+  await say('n','道だけじゃなくて、<b>山の上や岸辺</b>も歩けます。<b>ひかる紅葉</b>や<b>秘伝の宝箱</b>が、あちこちにかくれているんですよ！　わたしたちに<b>ぶつかる</b>と、おしゃべりもできます！',{mood:'joy'});
   await say('h','湖のまんなかは<b>御殿</b>。大物の怪が居座っておりますの。力がついたら、橋をわたって挑みなさいませ。——さあ、まいりましょう。',{mood:'joy'});
   save.intro = true; persist();
   toast('n','まずは右手の道へ。最初の帖は<b>「ず」</b>です！',6);
@@ -3391,6 +3392,76 @@ function chestAct(i){ return runAct(0, async()=>{
     await say('n','宝箱は <b>'+Object.keys(save.chest).length+'／9</b> 個め。ほかの山にも、まだかくれていますよ！',{mood:'joy'});
   }
 }); }
+
+/* ================= 場面：人にぶつかると会話がはじまる ================= */
+const TIPS = {
+  zu:'<b>「ず」</b>は<b>未然形</b>に付きますの。「ず・ず・ず・ぬ・ね・〇」——下に助動詞が続くときは「ざら・ざり・ざる・ざれ」の出番ですわ。',
+  mu:'<b>「む」</b>は<b>「すいかかえて」</b>。文末なら主語の人称で、一人称は意志、二人称は適当・勧誘、三人称は推量。文中は下が体言なら婉曲、助詞なら仮定ですわ。',
+  ki:'<b>「き」</b>は「（せ）・〇・き・<b>し</b>・<b>しか</b>・〇」。連体形「し」と已然形「しか」を見のがさぬように。自分で経験した過去を表しますの。',
+  keri:'<b>「けり」</b>は、会話文・和歌の中と<b>「なりけり」</b>の形なら<b>詠嘆</b>、地の文なら<b>過去</b>。これだけで見分けられますわ。',
+  tsu:'<b>「つ」</b>は「て・て・つ・つる・つれ・<b>てよ</b>」。「てむ」「つべし」のように下に推量が付いたら<b>強意</b>、「きっと〜」ですわ。',
+  nu:'同じ「ぬ」でも、上が<b>未然形</b>なら打消「ず」の連体形、<b>連用形</b>なら完了の「ぬ」。接続で見分けるのが極意ですわ。',
+  beshi:'<b>「べし」</b>は<b>「すいかとめて」</b>。終止形に付き、ラ変には連体形。打消の語といっしょなら<b>可能</b>を疑いなさいませ。',
+  naris:'伝聞・推定の<b>「なり」</b>は<b>終止形</b>に付きますの。音や声を聞いて判断する、耳の「なり」と覚えなさいませ。',
+  narid:'断定の<b>「なり」</b>は<b>体言・連体形</b>に付きますの。連用形に<b>「に」</b>があることも、お忘れなく。',
+};
+const SORA_CHAT = [
+  'この里の紅葉、一年じゅう散りつづけているんですよ。掃除当番がたいへんで……。',
+  '活用表は、歩きながら声に出すと覚えやすいんです。ず・ず・ず・ぬ・ね・まる！',
+  '山の上からの湖のながめ、もう見ましたか？　わたしのお気に入りなんです。',
+  '姫さまの講義、はじめはちんぷんかんぷんでしたけど、<b>接続</b>を覚えたら急に見えてきました！',
+  '物の怪って、よく見るとちょっとかわいいですよね。……あ、姫さまにはないしょですよ。',
+];
+function nextHint(){
+  const j = JODOUSHI.find(x=>!learned(x.id)||!save.leaf[x.id]||!save.quell[x.id]);
+  if(!j) return save.boss ? '九つの帖も御殿も、ぜんぶ修めましたね！　あとは<b>ひかる紅葉</b>と<b>宝箱</b>さがしです。' : '九つの帖はぜんぶ修めました。のこるは湖の<b>御殿</b>、大物の怪だけです！';
+  const what = !learned(j.id) ? '〈学〉で講義を聞く' : !save.leaf[j.id] ? '〈渡〉の飛び石で言の葉を取る' : '〈鎮〉で物の怪をしずめる';
+  return 'つぎのおすすめは<b>「'+j.name+'」</b>の帖で、'+what+'ことです！';
+}
+function talkAct(who){
+  const h = charsHome, c = chars[who];
+  /* 帖にいる姫に、まだ講義を聞いていないときにぶつかったら、そのまま講義へ */
+  if(who==='h' && h>=1 && h<=NS && !learned(JODOUSHI[h-1].id)) return lessonAct(h);
+  return runAct(0, async()=>{
+    const cp = c.g.position;
+    let dx = player.x-cp.x, dz = player.z-cp.z; const dl = Math.hypot(dx,dz)||1; dx /= dl; dz /= dl;
+    let px = cp.x+dx*2.9, pz = cp.z+dz*2.9, py = walkY(px,pz);
+    if(py===null){ px = player.x; pz = player.z; py = player.y; }
+    /* 相手が少し左に見える向きで立つ（会話の板と重ならないように） */
+    const yaw = Math.atan2(px-cp.x, pz-cp.z)-.6;
+    actReturn = {p:new THREE.Vector3(px,py,pz), yaw};
+    await goStage(mat(px,py,pz, yaw), {y:py});
+    placeQuit(-1.5,.42,-1.7);
+    showDlg(-2.0); dlg.mesh.position.x = .55; dlg.mesh.rotation.y = -.2;
+    const pick1 = a=>a[Math.random()*a.length|0];
+    if(who==='h'){
+      if(h===0){
+        await say('h','あら、ごきげんよう。里を歩くのには慣れまして？　〈しるし〉も、わたくしたちも、歩いてふれれば応えますわ。');
+        await say('h', countOf(save.leaf)<9 ? '言の葉は、いま <b>'+countOf(save.leaf)+'／9</b> 枚。帖ごとの〈渡〉の飛び石の先に、ひとつずつありますの。' : '九つの言の葉が、みな里にもどりました。まことに、ようございました。', {mood:'joy'});
+      }else if(h===10){
+        await say('h', save.boss ? '大物の怪は鎮まりました。腕がなまらぬよう、ときどき挑みにいらっしゃいませ。' : '大物の怪の問いは<b>全範囲から10問</b>。迷ったら<b>接続</b>と<b>主語の人称</b>を確かめる——それが勝ち筋ですわ。');
+      }else{
+        const j = JODOUSHI[h-1];
+        await say('h','おさらいですわね。よろしくてよ。');
+        await say('h', TIPS[j.id]);
+        await say('n','はいっ、覚えました！　……たぶん！',{mood:'joy'});
+      }
+    }else{
+      await say('n', pick1(SORA_CHAT));
+      await say('n', nextHint(), {mood:'joy'});
+      if(Object.keys(save.momiji).length<MOMIJI_N) await say('n','<b>ひかる紅葉</b>は <b>'+Object.keys(save.momiji).length+'／'+MOMIJI_N+'</b> 枚、<b>宝箱</b>は <b>'+Object.keys(save.chest).length+'／9</b> 個です。山の上もさがしてみてくださいね！');
+    }
+  });
+}
+function updateBump(){
+  if(!started || actId || traveling || mapOpen) return;
+  for(const k of ['h','n']){
+    const c = chars[k]; if(!c.g.visible) continue;
+    const d = Math.hypot(c.g.position.x-player.x, c.g.position.z-player.z);
+    if(d>2.7) c.cool = false;
+    else if(d<(k==='h' ? 1.15 : .95) && !c.cool && Math.abs(c.g.position.y-player.y)<1.5){ c.cool = true; talkAct(k); return; }
+  }
+}
 /* ================= 7. 起動・モード切替・毎フレーム ================= */
 let quitShown = false;
 let isOpen = false, wakeLock = null, fsWas = false;
@@ -3403,7 +3474,7 @@ function frame(now){
   scene.updateMatrixWorld();
   camera.getWorldPosition(headW); player.set(headW.x, rig.position.y, headW.z);
   updateTweens(dt);
-  if(started){ updateHome(); updateFoot(); }
+  if(started){ updateHome(); updateFoot(); updateBump(); }
   if(!!actId!==quitShown){ quitShown = !!actId; $id('vr-quit').style.display = quitShown ? '' : 'none'; $id('vr-map').style.display = quitShown ? 'none' : ''; }
   updateMarkers();
   updateTreasures(dt,clock.t);
@@ -3521,7 +3592,7 @@ const api = {
   },
   /* 動作確認用 */
   _dbg:{ get state(){ return {mode, started, actId, mapOpen, player:player.toArray(), save}; },
-         curAns:()=>qbS.q ? qbS.q.a : 0, chestAct:i=>{ chestAct(i); }, chests:()=>chests.map(c=>c.pos.toArray()), momiji:()=>momiji.map(m=>m.p.toArray()), setAutoWalk, walkY, waiting:()=>({any:!!anyWaiter, choice:!!choiceWaiter, sum:sum.mesh.visible, ofuda:ofuda[0].mesh.visible}), lessonAct, stonesAct, battleAct, introAct, mapGo, toggleMap, abortAct, fireAny, fireChoice, setView, V, look, rig, camera, scene, renderer, frameLesson, frameBattle, frameStones, travel, enterStereo, enterDesk, chars, mono, panels, save:()=>save }
+         curAns:()=>qbS.q ? qbS.q.a : 0, chestAct:i=>{ chestAct(i); }, dlgText:()=>dlgS.html, chests:()=>chests.map(c=>c.pos.toArray()), momiji:()=>momiji.map(m=>m.p.toArray()), setAutoWalk, walkY, waiting:()=>({any:!!anyWaiter, choice:!!choiceWaiter, sum:sum.mesh.visible, ofuda:ofuda[0].mesh.visible}), lessonAct, stonesAct, battleAct, introAct, mapGo, toggleMap, abortAct, fireAny, fireChoice, setView, V, look, rig, camera, scene, renderer, frameLesson, frameBattle, frameStones, travel, enterStereo, enterDesk, chars, mono, panels, save:()=>save }
 };
 return api;
   }
