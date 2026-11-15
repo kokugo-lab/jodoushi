@@ -309,6 +309,9 @@ table.katsu td .sub{display:block;font-size:12.5px;color:var(--hi);font-weight:6
 #vr-stereo-exit{position:absolute;left:50%;top:6px;transform:translateX(-50%);pointer-events:auto;background:rgba(0,0,0,.5);color:#fff;border:1px solid rgba(255,255,255,.5);border-radius:16px;padding:4px 14px;font-size:12px;font-family:var(--maru);cursor:pointer}
 #vr-rotate{display:none;position:absolute;inset:0;background:rgba(40,6,2,.86);color:#fff;align-items:center;justify-content:center;text-align:center;font-family:var(--mincho);font-size:18px;letter-spacing:.2em;line-height:2;pointer-events:none}
 @media (orientation:portrait){ #vr-root.stereo #vr-rotate{display:flex} }
+#vr-gyro{display:none;position:absolute;left:50%;top:40px;transform:translateX(-50%);max-width:92%;flex-direction:column;align-items:center;gap:8px;background:rgba(34,16,16,.82);color:#fff;border:1px solid rgba(255,255,255,.45);border-radius:14px;padding:8px 14px;font-size:12.5px;line-height:1.6;font-family:var(--maru);text-align:center;pointer-events:auto}
+#vr-gyro-ask{background:var(--kinari);color:var(--beni);border:1.5px solid var(--kin);border-radius:14px;padding:8px 16px;font-size:14px;font-weight:700;font-family:var(--maru);cursor:pointer}
+.vr-ver{font-size:10.5px;color:#a3805a;text-align:right;margin-top:2px}
 /*<VR:css*/
 </style>
 </head>
@@ -426,6 +429,7 @@ table.katsu td .sub{display:block;font-size:12.5px;color:var(--hi);font-weight:6
   </div>
   <div id="vr-stereo-ui">
     <button id="vr-stereo-exit">✕ VRモードをやめる</button>
+    <div id="vr-gyro"><span id="vr-gyro-text"></span><button id="vr-gyro-ask">傾きセンサーを許可する</button></div>
     <div id="vr-rotate">スマホを横向きにして<br>VRゴーグルにセットしてください</div>
   </div>
   <div id="vr-launch">
@@ -436,6 +440,7 @@ table.katsu td .sub{display:block;font-size:12.5px;color:var(--hi);font-weight:6
       <button class="t-btn vr-go" id="vr-go-desk">画面のまま3Dで冒険<small>パソコン・タブレット・スマホ</small></button>
       <div id="vr-launch-msg"></div>
       <div class="vr-foot"><button id="vr-back">◀ 表紙へ</button><button id="vr-reset">記録を消してはじめから</button></div>
+      <div class="vr-ver">版 11/15-5</div>
     </div>
   </div>
   <div id="vr-loading"></div>
@@ -2742,18 +2747,20 @@ function applyGyro(){
   camera.quaternion.setFromEuler(_e1).multiply(_gq1).multiply(_gq0.setFromAxisAngle(_zee,-or));
   if(gyro.need){ gyro.need = false; setView(player, gyro.wantYaw!=null ? gyro.wantYaw : rig.rotation.y); }
 }
-/* iPhone では「モーションと画面の向き」の許可が要る。許可の確認はボタンを押した直後（ほかの処理を待つ前）にしか出せない */
-async function startGyro(){
-  gyro.live = false; gyro.wantYaw = camYaw();
-  if(typeof DeviceOrientationEvent==='undefined') return 'none';
-  try{
-    if(typeof DeviceOrientationEvent.requestPermission==='function'){
-      const r = await DeviceOrientationEvent.requestPermission();
-      if(r!=='granted') return 'denied';
-    }
-    window.addEventListener('deviceorientation', onDeviceOrientation);
-    return 'ok';
-  }catch(e){ return 'denied'; }
+/* 傾きセンサーの許可をもとめる。iPhone では、画面を押したその瞬間（ほかの処理より先）に呼ばないと確認が出ない。
+   結果：'ok'＝許可された / 'auto'＝確認なしで使える端末 / 'denied'＝拒否 / 'none'＝センサーなし / 'insecure'＝https でない */
+function askGyro(){
+  gyro.live = false;
+  if(!window.isSecureContext) return Promise.resolve('insecure');
+  const D = window.DeviceOrientationEvent;
+  if(!D) return Promise.resolve('none');
+  const needAsk = typeof D.requestPermission==='function';
+  /* 信号は、許可の結果にかかわらず受けとれるようにしておく（確認なしで届く端末もある） */
+  window.removeEventListener('deviceorientation', onDeviceOrientation);
+  window.addEventListener('deviceorientation', onDeviceOrientation);
+  let p;
+  try{ p = needAsk ? D.requestPermission() : 'granted'; }catch(e){ return Promise.resolve('denied'); }
+  return Promise.resolve(p).then(r=>r!=='granted' ? 'denied' : needAsk ? 'ok' : 'auto', ()=>'denied');
 }
 function stopGyro(){
   window.removeEventListener('deviceorientation', onDeviceOrientation);
@@ -3505,21 +3512,37 @@ function begin(){
   if(first){ look.pitch = 0; setView(V(0,GY,61.5), 0); if(!save.intro) introAct(); }
 }
 function enterDesk(){ if(mode==='stereo') leaveStereo(); mode = 'desk'; onResize(); begin(); }
-async function enterStereo(){
+async function enterStereo(gp){
   const y = started ? camYaw() : 0;
-  const gp = startGyro();   /* 許可の確認を最初に出す（待ちをはさむと iPhone では出なくなる） */
+  gyro.wantYaw = y;
   mode = 'stereo'; rootEl.classList.add('stereo'); look.pitch = 0;
   try{ if(rootEl.requestFullscreen){ await rootEl.requestFullscreen(); fsWas = true; } }catch(e){}
   try{ if(screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape'); }catch(e){}
   try{ if(navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen'); }catch(e){}
-  const gr = await gp; gyro.wantYaw = y;
   onResize(); begin(); setView(player, y);
-  if(gr==='denied') toast(null, '傾きセンサーが<b>許可されていません</b>。ブラウザを一度とじて開きなおし、「モーションと画面の向き」を<b>許可</b>してください。いまは指でドラッグして見まわせます。', 12);
-  else setTimeout(()=>{ if(mode==='stereo' && !gyro.live) toast(null, '傾きセンサーの信号が届いていません。<b>https</b> のページで開いているか、端末の設定をご確認ください。いまは指でドラッグして見まわせます。', 10); }, 2500);
+  gyroStatus(await gp);
+}
+/* 傾きセンサーの状態を画面の上に出す（うまくいかないときは、もう一度許可をもとめるボタンも） */
+let gyroTimer = null;
+function gyroStatus(r){
+  const el = $id('vr-gyro'), tx = $id('vr-gyro-text'), bt = $id('vr-gyro-ask');
+  clearTimeout(gyroTimer);
+  const show = (msg, retry, hideMs)=>{ tx.textContent = msg; bt.style.display = retry ? '' : 'none'; el.style.display = 'flex'; if(hideMs) gyroTimer = setTimeout(()=>{ el.style.display = 'none'; }, hideMs); };
+  if(mode!=='stereo'){ el.style.display = 'none'; return; }
+  if(r==='insecure') return show('傾きセンサーは https のページでしか使えません。公開URLから開いてください（指でドラッグして見まわせます）', false);
+  if(r==='none') return show('この端末には傾きセンサーがありません（指でドラッグして見まわせます）', false);
+  show(r==='ok' ? '傾きセンサー：許可されました' : r==='auto' ? '傾きセンサー：この端末は確認なしで使えます' : '傾きセンサーを確かめています……', false);
+  /* 少し待って、実際に信号が届いているかで判断する */
+  gyroTimer = setTimeout(()=>{
+    if(mode!=='stereo') return;
+    if(gyro.live){ el.style.display = 'none'; return; }
+    if(r==='denied') show('傾きセンサーが許可されていません。下のボタンをおすか、ブラウザをとじて開きなおしてください（指でドラッグしても見まわせます）', true);
+    else show('傾きセンサーの信号が届きません。端末やブラウザの設定で「モーションと画面の向き」を有効にしてください（指でドラッグしても見まわせます）', true);
+  }, r==='denied' ? 1500 : 3000);
 }
 function leaveStereo(){
   if(mode!=='stereo') return;
-  stopGyro(); rootEl.classList.remove('stereo'); mode = 'desk';
+  stopGyro(); rootEl.classList.remove('stereo'); mode = 'desk'; clearTimeout(gyroTimer); $id('vr-gyro').style.display = 'none';
   try{ if(document.fullscreenElement) document.exitFullscreen(); }catch(e){}
   try{ if(wakeLock){ wakeLock.release(); wakeLock = null; } }catch(e){}
   fsWas = false; onResize(); showHud();
@@ -3527,7 +3550,8 @@ function leaveStereo(){
 function exitImmersive(){ if(mode==='stereo') leaveStereo(); }
 
 $id('vr-go-desk').onclick = ()=>{ sfx('select'); enterDesk(); };
-$id('vr-go-stereo').onclick = ()=>{ sfx('select'); enterStereo(); };
+$id('vr-go-stereo').onclick = ()=>{ const gp = askGyro(); sfx('select'); enterStereo(gp); };   /* 許可の確認がいちばん先 */
+$id('vr-gyro-ask').onclick = ()=>{ askGyro().then(gyroStatus); };
 $id('vr-back').onclick = ()=>{ sfx('tap'); api.close(); };
 $id('vr-exit').onclick = ()=>{ sfx('tap'); api.close(); };
 $id('vr-map').onclick = ()=>toggleMap();
@@ -3592,7 +3616,7 @@ const api = {
   },
   /* 動作確認用 */
   _dbg:{ get state(){ return {mode, started, actId, mapOpen, player:player.toArray(), save}; },
-         curAns:()=>qbS.q ? qbS.q.a : 0, chestAct:i=>{ chestAct(i); }, dlgText:()=>dlgS.html, chests:()=>chests.map(c=>c.pos.toArray()), momiji:()=>momiji.map(m=>m.p.toArray()), setAutoWalk, walkY, waiting:()=>({any:!!anyWaiter, choice:!!choiceWaiter, sum:sum.mesh.visible, ofuda:ofuda[0].mesh.visible}), lessonAct, stonesAct, battleAct, introAct, mapGo, toggleMap, abortAct, fireAny, fireChoice, setView, V, look, rig, camera, scene, renderer, frameLesson, frameBattle, frameStones, travel, enterStereo, enterDesk, chars, mono, panels, save:()=>save }
+         curAns:()=>qbS.q ? qbS.q.a : 0, chestAct:i=>{ chestAct(i); }, dlgText:()=>dlgS.html, chests:()=>chests.map(c=>c.pos.toArray()), momiji:()=>momiji.map(m=>m.p.toArray()), setAutoWalk, walkY, waiting:()=>({any:!!anyWaiter, choice:!!choiceWaiter, sum:sum.mesh.visible, ofuda:ofuda[0].mesh.visible}), lessonAct, stonesAct, battleAct, introAct, mapGo, toggleMap, abortAct, fireAny, fireChoice, setView, V, look, rig, camera, scene, renderer, frameLesson, frameBattle, frameStones, travel, enterStereo:()=>enterStereo(askGyro()), enterDesk, chars, mono, panels, save:()=>save }
 };
 return api;
   }
